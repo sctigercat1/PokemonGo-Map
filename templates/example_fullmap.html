@@ -50,15 +50,12 @@
             // Requests the data and populates the map
             $.get(baseURL + "/data", function(response){
                 var json_obj = $.parseJSON(response);
-                //alert('all'+response);
                 for (var index in json_obj) {
                     if (index === 0 && markerCount !== 0) {
                         continue;
                     }
                     var item = json_obj[index];
                     if (!(String(item["lat"]) in allMarkers)) {
-                        ///////alert('single'+json_obj[index].toSource());
-                        //alert(item.toSource());
                         var location = new google.maps.LatLng(item["lat"], item["lng"]);
                         window['marker'+markerCount] = new google.maps.Marker({
                             position: location,
@@ -71,24 +68,17 @@
                             'click',
                             getInfoCallback(map, item["infobox"])
                         );
-                        //alert(item["infobox"]);
                         allMarkers[String(item["lat"])] = {'count': markerCount, 'deleted': false};
                         ++markerCount;
                     } else {
                         if (allMarkers[String(item["lat"])]['deleted'] === false) {
                             // Check if expired
                             if (item['expiredTime']) {
-                                //alert('hi'+String(item["lat"]));
-                                ///////alert('used'+item.toSource());
                                 var expiredTime = new Date(parseInt(item['expiredTime'])*1000);
                                 var now = Date.now();
                                 if (expiredTime < now) {
-                                    //alert('expired');
-                                    //alert(item.toSource());
-                                    //alert('marker'+window['marker'+allMarkers[String(item["lat"])]['count']]);
                                     window['marker'+allMarkers[String(item["lat"])]['count']].setMap(null);
                                     allMarkers[String(item["lat"])]['deleted'] = true;
-                                    //alert('done!');
                                 }
                             }
                         }
