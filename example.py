@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import flask
-from flask import Flask, render_template
 from flask_googlemaps import GoogleMaps
 from flask_googlemaps import Map
 from flask_googlemaps import icons
@@ -11,7 +10,6 @@ import re
 import sys
 import struct
 import json
-import time
 import requests
 import argparse
 import threading
@@ -26,16 +24,12 @@ import time
 
 from google.protobuf.internal import encoder
 from s2sphere import *
-from datetime import datetime
 from geopy.geocoders import GoogleV3
 from gpsoauth import perform_master_login, perform_oauth
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from requests.adapters import ConnectionError
 from requests.models import InvalidURL
 from transform import *
-
-requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 API_URL = 'https://pgorelease.nianticlabs.com/plfe/rpc'
 LOGIN_URL = \
@@ -78,6 +72,7 @@ numbertoteam = {  # At least I'm pretty sure that's it. I could be wrong and the
     2: 'Valor',
     3: 'Instinct',
 }
+origin_lat, origin_lon = None, None
 
 # stuff for in-background search thread
 
@@ -167,13 +162,14 @@ def retrying_set_location(location_name):
 def set_location(location_name):
     geolocator = GoogleV3()
     prog = re.compile('^(\-?\d+(\.\d+)?),\s*(\-?\d+(\.\d+)?)$')
+    global origin_lat
+    global origin_lon
     if prog.match(location_name):
         local_lat, local_lng = [float(x) for x in location_name.split(",")]
         alt = 0
     else:
         loc = geolocator.geocode(location_name)
-        local_lat = loc.latitude
-        local_lng = loc.longitude
+        origin_lat, origin_lon = local_lat, local_lng = loc.latitude, loc.longitude
         alt = loc.altitude
         print '[!] Your given location: {}'.format(loc.address.encode('utf-8'))
 
@@ -329,7 +325,7 @@ def login_ptc(username, password):
     head = {'User-Agent': 'Niantic App'}
     r = SESSION.get(LOGIN_URL, headers=head)
     if r is None:
-        return render_template('nope.html', fullmap=fullmap)
+        return flask.render_template('nope.html', fullmap=fullmap)
 
     try:
         jdata = json.loads(r.content)
@@ -654,21 +650,21 @@ transform_from_wgs_to_gcj(Location(Fort.Latitude, Fort.Longitude))
             if pokename.lower() not in only:
                 continue
 
-    disappear_timestamp = time.time() + poke.TimeTillHiddenMs \
-        / 1000
+        disappear_timestamp = time.time() + poke.TimeTillHiddenMs \
+            / 1000
 
-    if args.china:
-        (poke.Latitude, poke.Longitude) = \
-            transform_from_wgs_to_gcj(Location(poke.Latitude,
-                poke.Longitude))
+        if args.china:
+            (poke.Latitude, poke.Longitude) = \
+                transform_from_wgs_to_gcj(Location(poke.Latitude,
+                    poke.Longitude))
 
-    pokemons[poke.SpawnPointId] = {
-        "lat": poke.Latitude,
-        "lng": poke.Longitude,
-        "disappear_time": disappear_timestamp,
-        "id": poke.pokemon.PokemonId,
-        "name": pokename
-    }
+        pokemons[poke.SpawnPointId] = {
+            "lat": poke.Latitude,
+            "lng": poke.Longitude,
+            "disappear_time": disappear_timestamp,
+            "id": poke.pokemon.PokemonId,
+            "name": pokename
+        }
 
 def clear_stale_pokemons():
     current_time = time.time()
@@ -715,7 +711,7 @@ def register_background_thread(initial_registration=False):
 
 
 def create_app():
-    app = Flask(__name__, template_folder='templates')
+    app = flask.Flask(__name__, template_folder='templates')
 
     GoogleMaps(app, key=GOOGLEMAPS_KEY)
     return app
@@ -734,7 +730,7 @@ def raw_data():
     """ Gets raw data for pokemons/gyms/pokestops via REST """
     return flask.jsonify(pokemons=pokemons, gyms=gyms, pokestops=pokestops)
 
-
+# CAN DISABLE
 @app.route('/config')
 def config():
     """ Gets the settings for the Google Maps via REST"""
@@ -751,7 +747,7 @@ def config():
 def fullmap():
     clear_stale_pokemons()
 
-    return render_template(
+    return flask.render_template(
         'example_fullmap.html', fullmap=get_map(), auto_refresh=auto_refresh)
 
 
@@ -773,8 +769,8 @@ def next_loc():
 def get_pokemarkers():
     pokeMarkers = [{
         'icon': icons.dots.red,
-        'lat': FLOAT_LAT,
-        'lng': FLOAT_LONG,
+        'lat': origin_lat,
+        'lng': origin_lon,
         'infobox': "Start position"
     }]
 
@@ -795,7 +791,7 @@ def get_pokemarkers():
     <span> - </span>
     <b>{name}</b>
 </div>
-<center> disappears at {disappear_time_formatted}</center>
+<div>disappears at {disappear_time_formatted} <span class='label-countdown' disappears-at='{disappear_time}'></span></div>
 '''
         label = LABEL_TMPL.format(**pokemon)
         #  NOTE: `infobox` field doesn't render multiple line string in frontend
@@ -805,7 +801,8 @@ def get_pokemarkers():
             'icon': 'static/icons/%d.png' % pokemon["id"],
             'lat': pokemon["lat"],
             'lng': pokemon["lng"],
-            'infobox': label
+            'infobox': label,
+            'expiredTime': pokemon["disappear_time"]
         })
 
     for gym_key in gyms:
@@ -840,10 +837,9 @@ def get_map():
     fullmap = Map(
         identifier="fullmap",
         style='height:100%;width:100%;top:0;left:0;position:absolute;z-index:200;',
-        lat=FLOAT_LAT,
-        lng=FLOAT_LONG,
-        markers=get_pokemarkers(),
-        zoom='15', )
+        lat=origin_lat,
+        lng=origin_lon,
+        zoom='15',)
     return fullmap
 
 
