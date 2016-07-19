@@ -190,6 +190,16 @@ def set_location_coords(lat, long, alt):
     COORDS_ALTITUDE = f2i(alt)
 
 
+def updateLocationCoords(lat, long):
+    global origin_lat, origin_lon
+    global NEXT_LAT, NEXT_LONG
+    set_location_coords(lat, long, 0)
+    origin_lat = lat
+    origin_lon = long
+    NEXT_LAT = NEXT_LONG = 0
+
+
+
 def get_location_coords():
     return (COORDS_LATITUDE, COORDS_LONGITUDE, COORDS_ALTITUDE)
 
@@ -587,11 +597,12 @@ def main():
         print('Completed: ' + str(
             (step + pos * .25 - .25) / (steplimit**2) * 100) + '%')
 
-    if (NEXT_LAT and NEXT_LONG
-        and NEXT_LAT != FLOAT_LAT
-        and NEXT_LONG != FLOAT_LONG):
-        print('Update to next location %f, %f' % (NEXT_LAT, NEXT_LONG))
-        set_location_coords(NEXT_LAT, NEXT_LONG, 0)
+        if (NEXT_LAT and NEXT_LONG
+            and NEXT_LAT != FLOAT_LAT
+            and NEXT_LONG != FLOAT_LONG):
+            print('Update to next location %f, %f' % (NEXT_LAT, NEXT_LONG))
+            updateLocationCoords(NEXT_LAT, NEXT_LONG)
+            return main()
 
     register_background_thread()
 
@@ -677,7 +688,10 @@ def clear_stale_pokemons():
         if current_time > pokemon['disappear_time']:
             print "[+] removing stale pokemon %s at %f, %f from list" % (
                 pokemon['name'], pokemon['lat'], pokemon['lng'])
-            del pokemons[pokemon_key]
+            try:
+                del pokemons[pokemon_key]
+            except Exception as e:
+                print('Failed to clear stale pokemon:', e)
 
 
 def register_background_thread(initial_registration=False):
@@ -754,6 +768,11 @@ def fullmap():
         'example_fullmap.html', fullmap=get_map(), auto_refresh=auto_refresh)
 
 
+@app.route('/loc')
+def set_next_loc():
+    return flask.render_template('loc_request.html')
+
+
 @app.route('/next_loc')
 def next_loc():
     global NEXT_LAT, NEXT_LONG
@@ -766,6 +785,7 @@ def next_loc():
         print('[+] Saved next location as %s,%s' % (lat, lon))
         NEXT_LAT = float(lat)
         NEXT_LONG = float(lon)
+        time.sleep(3)
         return 'ok'
 
 
@@ -848,5 +868,10 @@ def get_map():
 
 if __name__ == '__main__':
     args = get_args()
+
+    # SSL
+    context = ('cert.crt', 'key.key')
+
     register_background_thread(initial_registration=True)
-    app.run(debug=True, threaded=True, host=args.host, port=args.port)
+
+    app.run(debug=True, threaded=True, host=args.host, port=args.port, ssl_context=context)

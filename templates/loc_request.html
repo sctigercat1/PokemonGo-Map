@@ -1,0 +1,46 @@
+<p>Accept the location request to change the base location for this script.</p>
+<br>
+<p id="waiting"></p>
+
+<script src="http://maps.googleapis.com/maps/api/js?sensor=true"></script>
+<script>
+  var success = false;
+  var baseURL = location.protocol + "//" + location.hostname + (location.port ? ":"+location.port: "");
+
+  var HttpClient = function() {
+    this.get = function(aUrl, aCallback) {
+        var anHttpRequest = new XMLHttpRequest();
+        anHttpRequest.onreadystatechange = function() { 
+            if (anHttpRequest.readyState == 4 && anHttpRequest.status == 200)
+                aCallback(anHttpRequest.responseText);
+        }
+
+        anHttpRequest.open( "GET", aUrl, true );            
+        anHttpRequest.send( null );
+    }
+  }
+
+  function initGeolocation() {
+    if (navigator && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(successCallback, errorCallback);
+      document.getElementById("waiting").innerHTML = "Waiting...";
+    } else {
+      console.log('Geolocation is not supported');
+    }
+  }
+ 
+  function errorCallback() {
+    alert('failure!');
+  }
+
+  function successCallback(position) {
+    var success = true;
+    var lat = position.coords.latitude;
+    var lon = position.coords.longitude;
+    var aClient = new HttpClient();
+    aClient.get(baseURL + '/next_loc' + '?lat=' + encodeURI(lat) + '&lon=' + encodeURI(lon), function(response) {
+        window.location = baseURL;
+    });
+  }
+  initGeolocation();
+</script>

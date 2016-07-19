@@ -2,3 +2,6 @@
 .idea
 venv/
 run.bat
+*.crt
+*.csr
+*.key*
